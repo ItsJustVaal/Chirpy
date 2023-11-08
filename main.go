@@ -23,11 +23,16 @@ func main() {
 	// API sub-router
 	apiServer := chi.NewRouter()
 	apiServer.Get("/healthz", handlerReadiness)
-	apiServer.Get("/metrics", cfg.handlerMetrics)
 	apiServer.Get("/reset", cfg.handlerReset)
+	apiServer.Post("/validate_chirp", handlerValidateChirp)
+
+	// Admin sub-router
+	adminServer := chi.NewRouter()
+	adminServer.Get("/metrics", cfg.handlerMetrics)
 
 	// Mounting sub-routers
 	server.Mount("/api", apiServer)
+	server.Mount("/admin", adminServer)
 
 	// Setting CORS & Server Struct
 	corServer := middlewareCors(server)
