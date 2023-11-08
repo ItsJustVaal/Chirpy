@@ -3,27 +3,33 @@ package main
 import (
 	"log"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 )
 
-func middlewareCors(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "*")
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 func main() {
-	port := "42069"
-	server := http.NewServeMux()
-	server.Handle("/app/", http.StripPrefix("/app", http.FileServer(http.Dir("."))))
-	server.HandleFunc("/healthz", handlerReadiness)
+	cfg := apiConfig{
+		fileserverHits: 0,
+	}
 
+	port := "42069"
+	handler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
+
+	// Main router
+	server := chi.NewRouter()
+	server.Handle("/app", cfg.middlewareMetricsInc(handler))
+	server.Handle("/app/*", cfg.middlewareMetricsInc(handler))
+
+	// API sub-router
+	apiServer := chi.NewRouter()
+	apiServer.Get("/healthz", handlerReadiness)
+	apiServer.Get("/metrics", cfg.handlerMetrics)
+	apiServer.Get("/reset", cfg.handlerReset)
+
+	// Mounting sub-routers
+	server.Mount("/api", apiServer)
+
+	// Setting CORS & Server Struct
 	corServer := middlewareCors(server)
 	srv := &http.Server{
 		Addr:    ":" + port,
