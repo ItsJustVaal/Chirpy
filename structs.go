@@ -5,7 +5,13 @@ type apiConfig struct {
 }
 
 type jsonBody struct {
-	Body  string `json:"body"`
+	Body string `json:"body"`
+}
+
+type cleanedBody struct {
+	Resp string `json:"cleaned_body"`
+}
+
+type errorResponse struct {
 	Error string `json:"error"`
-	Valid bool   `json:"valid"`
 }

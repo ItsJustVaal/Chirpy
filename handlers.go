@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 )
 
@@ -51,38 +50,22 @@ func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
 	checker := jsonBody{}
 	err := decoder.Decode(&checker)
 	if err != nil {
-		w.WriteHeader(500)
-		jsonErr := jsonBody{
-			Error: "Something went wrong",
-		}
-		dat, err := json.Marshal(jsonErr)
-		if err != nil {
-			log.Printf("Error marshalling JSON: %s", err)
-			w.WriteHeader(500)
-			return
-		}
-		w.Write(dat)
+		errorResp(w, http.StatusInternalServerError, "Couldn't decode parameters")
 		return
 	}
 	if len(checker.Body) > 140 {
-		w.WriteHeader(400)
-		jsonErr := jsonBody{
-			Error: "Chirp is too long",
-		}
-		dat, err := json.Marshal(jsonErr)
-		if err != nil {
-			log.Printf("Error marshalling JSON: %s", err)
-			w.WriteHeader(500)
-			return
-		}
-		w.Write(dat)
+		errorResp(w, http.StatusBadRequest, "Chirp is too long")
 		return
 	}
-	jsonResp := jsonBody{
-		Valid: true,
+
+	blockedWords := map[string]struct{}{
+		"kerfuffle": {},
+		"sharbert":  {},
+		"fornax":    {},
 	}
-	dat, err := json.Marshal(jsonResp)
-	w.WriteHeader(200)
-	w.Write(dat)
-	return
+	cleanBody := cleanInput(checker.Body, blockedWords)
+
+	jsonResp(w, http.StatusOK, cleanedBody{
+		Resp: cleanBody,
+	})
 }
