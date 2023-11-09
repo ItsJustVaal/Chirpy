@@ -8,8 +8,16 @@ import (
 )
 
 func main() {
+	// Create and load DB
+	dbPath := "database.json"
+	database, err := NewDB(dbPath)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	cfg := apiConfig{
 		fileserverHits: 0,
+		database:       database,
 	}
 
 	port := "42069"
@@ -24,7 +32,8 @@ func main() {
 	apiServer := chi.NewRouter()
 	apiServer.Get("/healthz", handlerReadiness)
 	apiServer.Get("/reset", cfg.handlerReset)
-	apiServer.Post("/validate_chirp", handlerValidateChirp)
+	apiServer.Post("/chirps", cfg.handlerValidateChirp)
+	apiServer.Get("/chirps", cfg.handlerGetChirps)
 
 	// Admin sub-router
 	adminServer := chi.NewRouter()
@@ -40,7 +49,6 @@ func main() {
 		Addr:    ":" + port,
 		Handler: corServer,
 	}
-
-	log.Printf("Serving on port: %s\n", port)
+	log.Println(database)
 	log.Fatal(srv.ListenAndServe())
 }

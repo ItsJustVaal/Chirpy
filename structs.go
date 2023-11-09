@@ -2,6 +2,7 @@ package main
 
 type apiConfig struct {
 	fileserverHits int
+	database       *DB
 }
 
 type jsonBody struct {
@@ -14,4 +15,9 @@ type cleanedBody struct {
 
 type errorResponse struct {
 	Error string `json:"error"`
+}
+
+type chirpsResponse struct {
+	Body string `json:"body"`
+	ID   int    `json:"id"`
 }

@@ -28,6 +28,7 @@ func errorResp(w http.ResponseWriter, errorCode int, message string) {
 }
 
 func jsonResp(w http.ResponseWriter, statusCode int, response interface{}) {
+	log.Println(response)
 	w.Header().Set("Content-Type", "applcation/json")
 	data, err := json.Marshal(response)
 	if err != nil {
