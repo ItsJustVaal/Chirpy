@@ -49,6 +49,7 @@ func main() {
 		Addr:    ":" + port,
 		Handler: corServer,
 	}
-	log.Println(database)
+
+	log.Printf("Serving on port: %s\n", port)
 	log.Fatal(srv.ListenAndServe())
 }

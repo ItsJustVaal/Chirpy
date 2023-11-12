@@ -18,6 +18,8 @@ func cleanInput(body string, blockedWords map[string]struct{}) string {
 	return strings.Join(splitString, " ")
 }
 
+// Reusable http response functions
+// Errorfunc
 func errorResp(w http.ResponseWriter, errorCode int, message string) {
 	if errorCode > 499 {
 		log.Printf("Responding with 5xx error: %s", message)
@@ -27,6 +29,7 @@ func errorResp(w http.ResponseWriter, errorCode int, message string) {
 	})
 }
 
+// Standard response
 func jsonResp(w http.ResponseWriter, statusCode int, response interface{}) {
 	log.Println(response)
 	w.Header().Set("Content-Type", "applcation/json")
