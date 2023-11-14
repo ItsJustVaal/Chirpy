@@ -57,7 +57,7 @@ func (cfg *apiConfig) AddChirp(body string) (Chirp, error) {
 	return newChirp, nil
 }
 
-func (cfg *apiConfig) AddUser(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerAddUser(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	checker := jsonBody{}
 	err := decoder.Decode(&checker)
@@ -65,8 +65,7 @@ func (cfg *apiConfig) AddUser(w http.ResponseWriter, r *http.Request) {
 		errorResp(w, http.StatusInternalServerError, "Couldn't decode parameters")
 		return
 	}
-	fmt.Println(checker.Email)
-	newUser, err := cfg.database.CreateUser(checker.Email)
+	newUser, err := cfg.database.CreateUser(checker.Email, checker.Password)
 	if err != nil {
 		log.Fatalln("Failed to add User")
 		return
@@ -148,4 +147,24 @@ func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request
 	}
 
 	jsonResp(w, http.StatusOK, chirp)
+}
+
+func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	decoder := json.NewDecoder(r.Body)
+	checker := jsonBody{}
+	err := decoder.Decode(&checker)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Couldn't decode parameters")
+		return
+	}
+
+	id, err := cfg.database.checkLogin(checker.Email, checker.Password)
+	if err != nil {
+		errorResp(w, http.StatusUnauthorized, "Wrong email or password")
+	}
+	jsonResp(w, http.StatusOK, userResponse{
+		Email: checker.Email,
+		ID:    id,
+	})
 }

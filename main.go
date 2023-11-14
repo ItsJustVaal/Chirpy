@@ -32,10 +32,11 @@ func main() {
 	apiServer := chi.NewRouter()
 	apiServer.Get("/healthz", handlerReadiness)
 	apiServer.Get("/reset", cfg.handlerReset)
-	apiServer.Post("/chirps", cfg.handlerValidateChirp)
-	apiServer.Post("/users", cfg.AddUser)
 	apiServer.Get("/chirps", cfg.handlerGetChirps)
 	apiServer.Get("/chirps/{id}", cfg.handlerGetChirpByID)
+	apiServer.Post("/chirps", cfg.handlerValidateChirp)
+	apiServer.Post("/users", cfg.handlerAddUser)
+	apiServer.Post("/login", cfg.handlerLogin)
 
 	// Admin sub-router
 	adminServer := chi.NewRouter()

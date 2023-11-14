@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 func cleanInput(body string, blockedWords map[string]struct{}) string {
@@ -41,4 +43,13 @@ func jsonResp(w http.ResponseWriter, statusCode int, response interface{}) {
 	}
 	w.WriteHeader(statusCode)
 	w.Write(data)
+}
+
+// Hash password
+func hashPassword(password string) (string, error) {
+	newPass, err := bcrypt.GenerateFromPassword([]byte(password), 10)
+	if err != nil {
+		return " ", err
+	}
+	return string(newPass), nil
 }
