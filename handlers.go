@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // Checks Server Status
@@ -104,4 +107,25 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(finalResp)
+}
+
+func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request) {
+	chirpIDString := chi.URLParam(r, "id")
+	log.Println(chirpIDString)
+	id, err := strconv.Atoi(chirpIDString)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Error getting ID")
+		return
+	}
+	chirp, err := cfg.database.GetChirpByID(id)
+	if err != nil {
+		errorResp(w, http.StatusNotFound, "Chirp Doesn't Exist")
+		return
+	}
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Failed to Marshal")
+		return
+	}
+
+	jsonResp(w, http.StatusOK, chirp)
 }

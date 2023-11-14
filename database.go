@@ -37,7 +37,7 @@ func NewDB(path string) (*DB, error) {
 		log.Println("Deleted old file")
 		log.Println("Creating new file")
 		os.Create("database.json")
-		err := os.WriteFile("./database.json", []byte("{ \"chirps\": {}}"), 0666)
+		err := os.WriteFile("./database.json", []byte("{ \"chirps\": {}, \"users\": {}}"), 0666)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -75,6 +75,18 @@ func (db *DB) CreateChirp(body string) (Chirp, error) {
 
 func (db *DB) GetChirps() (DBChirp, error) {
 	return db.chirps, nil
+}
+
+func (db *DB) GetChirpByID(id int) (Chirp, error) {
+	chirp, ok := db.chirps.Chirps[id]
+	if !ok {
+		return Chirp{}, fmt.Errorf("Chirp Does Not Exist")
+	}
+	respChirp := Chirp{
+		Body: chirp.Body,
+		ID:   chirp.ID,
+	}
+	return respChirp, nil
 }
 
 func (db *DB) loadDB() error {

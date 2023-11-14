@@ -34,13 +34,15 @@ func main() {
 	apiServer.Get("/reset", cfg.handlerReset)
 	apiServer.Post("/chirps", cfg.handlerValidateChirp)
 	apiServer.Get("/chirps", cfg.handlerGetChirps)
+	apiServer.Get("/chirps/{id}", cfg.handlerGetChirpByID)
+	server.Mount("/api", apiServer)
 
 	// Admin sub-router
 	adminServer := chi.NewRouter()
 	adminServer.Get("/metrics", cfg.handlerMetrics)
 
 	// Mounting sub-routers
-	server.Mount("/api", apiServer)
+
 	server.Mount("/admin", adminServer)
 
 	// Setting CORS & Server Struct
