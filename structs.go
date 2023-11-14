@@ -6,7 +6,8 @@ type apiConfig struct {
 }
 
 type jsonBody struct {
-	Body string `json:"body"`
+	Body  string `json:"body"`
+	Email string `json:"email"`
 }
 
 type cleanedBody struct {
@@ -20,4 +21,9 @@ type errorResponse struct {
 type chirpsResponse struct {
 	Body string `json:"body"`
 	ID   int    `json:"id"`
+}
+
+type userResponse struct {
+	Email string `json:"email"`
+	ID    int    `json:"id"`
 }

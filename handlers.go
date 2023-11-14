@@ -57,6 +57,26 @@ func (cfg *apiConfig) AddChirp(body string) (Chirp, error) {
 	return newChirp, nil
 }
 
+func (cfg *apiConfig) AddUser(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	checker := jsonBody{}
+	err := decoder.Decode(&checker)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Couldn't decode parameters")
+		return
+	}
+	fmt.Println(checker.Email)
+	newUser, err := cfg.database.CreateUser(checker.Email)
+	if err != nil {
+		log.Fatalln("Failed to add User")
+		return
+	}
+	jsonResp(w, http.StatusCreated, userResponse{
+		Email: newUser.Email,
+		ID:    newUser.ID,
+	})
+}
+
 func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	decoder := json.NewDecoder(r.Body)

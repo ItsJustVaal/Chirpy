@@ -11,17 +11,24 @@ import (
 type DB struct {
 	path        string
 	chirpsCount int
+	usersCount  int
 	chirps      DBChirp
 	mux         *sync.RWMutex
 }
 
 type DBChirp struct {
 	Chirps map[int]Chirp `json:"chirps"`
+	Users  map[int]User  `json:"users"`
 }
 
 type Chirp struct {
 	Body string `json:"body"`
 	ID   int    `json:"id"`
+}
+
+type User struct {
+	Email string `json:"email"`
+	ID    int    `json:"id"`
 }
 
 func NewDB(path string) (*DB, error) {
@@ -48,6 +55,7 @@ func NewDB(path string) (*DB, error) {
 	DB := DB{
 		path:        path,
 		chirpsCount: 1,
+		usersCount:  1,
 	}
 	err = DB.loadDB()
 	if err != nil {
@@ -71,6 +79,23 @@ func (db *DB) CreateChirp(body string) (Chirp, error) {
 		log.Fatalln(err)
 	}
 	return newChirp, nil
+}
+
+func (db *DB) CreateUser(email string) (User, error) {
+	if email == "" {
+		return User{}, fmt.Errorf("Body is empty")
+	}
+	newUser := User{
+		ID:    db.usersCount,
+		Email: email,
+	}
+	db.chirps.Users[db.usersCount] = newUser
+	db.usersCount++
+	err := db.writeDB()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	return newUser, nil
 }
 
 func (db *DB) GetChirps() (DBChirp, error) {
@@ -103,7 +128,7 @@ func (db *DB) loadDB() error {
 }
 
 func (db *DB) writeDB() error {
-	data, err := json.Marshal(db.chirps.Chirps)
+	data, err := json.Marshal(db.chirps)
 	if err != nil {
 		log.Fatalln(err)
 	}
