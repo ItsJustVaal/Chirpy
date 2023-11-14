@@ -21,12 +21,12 @@ func main() {
 	}
 
 	port := "42069"
-	handler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
+	handler := cfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("."))))
 
 	// Main router
 	server := chi.NewRouter()
-	server.Handle("/app", cfg.middlewareMetricsInc(handler))
-	server.Handle("/app/*", cfg.middlewareMetricsInc(handler))
+	server.Handle("/app", handler)
+	server.Handle("/app/*", handler)
 
 	// API sub-router
 	apiServer := chi.NewRouter()
