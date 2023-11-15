@@ -83,12 +83,12 @@ func (cfg *apiConfig) handlerAddUser(w http.ResponseWriter, r *http.Request) {
 func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) {
 	token, err := GetBearerToken(r.Header)
 	if err != nil {
-		errorResp(w, http.StatusInternalServerError, "Couldn't find JWT")
+		errorResp(w, http.StatusUnauthorized, "Couldn't find JWT")
 		return
 	}
 	user, err := ValidateJWT(token, cfg.JWTSecret)
 	if err != nil {
-		errorResp(w, http.StatusInternalServerError, "Couldn't validate JWT")
+		errorResp(w, http.StatusUnauthorized, "Couldn't Validate Token")
 		return
 	}
 
@@ -108,7 +108,7 @@ func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		errorResp(w, http.StatusInternalServerError, err.Error())
 	}
-	jsonResp(w, http.StatusOK, User{
+	jsonResp(w, http.StatusOK, userResponse{
 		Email: updatedUser.Email,
 		ID:    userIDInt,
 	})
@@ -213,11 +213,12 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defaultExpiration := 60 * 60 * 24
-	if checker.ExpiresInSeconds == 0 || checker.ExpiresInSeconds > defaultExpiration {
+	if checker.ExpiresInSeconds == 0 {
+		checker.ExpiresInSeconds = defaultExpiration
+	} else if checker.ExpiresInSeconds > defaultExpiration {
 		checker.ExpiresInSeconds = defaultExpiration
 	}
-
-	token, err := MakeJWT(user.ID, cfg.JWTSecret, time.Duration(checker.ExpiresInSeconds))
+	token, err := MakeJWT(user.ID, cfg.JWTSecret, time.Duration(checker.ExpiresInSeconds)*time.Second)
 	if err != nil {
 		errorResp(w, http.StatusInternalServerError, "Couldnt make JWT")
 		return
