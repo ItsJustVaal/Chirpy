@@ -3,20 +3,25 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/joho/godotenv"
 )
 
 func main() {
 	// Create and load DB
+	godotenv.Load()
 	dbPath := "database.json"
 	database, err := NewDB(dbPath)
+	jwtSecret := os.Getenv("JWT_SECRET")
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	cfg := apiConfig{
 		fileserverHits: 0,
+		JWTSecret:      jwtSecret,
 		database:       database,
 	}
 
@@ -37,6 +42,7 @@ func main() {
 	apiServer.Post("/chirps", cfg.handlerValidateChirp)
 	apiServer.Post("/users", cfg.handlerAddUser)
 	apiServer.Post("/login", cfg.handlerLogin)
+	apiServer.Put("/users", cfg.handlerUpdateUser)
 
 	// Admin sub-router
 	adminServer := chi.NewRouter()

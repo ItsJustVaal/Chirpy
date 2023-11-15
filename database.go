@@ -6,8 +6,6 @@ import (
 	"log"
 	"os"
 	"sync"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 type DB struct {
@@ -93,7 +91,6 @@ func (db *DB) CreateUser(email, password string) (User, error) {
 			return User{}, fmt.Errorf("Email already exists")
 		}
 	}
-
 	hashedPW, err := hashPassword(password)
 	if err != nil {
 		log.Fatalln(err)
@@ -112,17 +109,35 @@ func (db *DB) CreateUser(email, password string) (User, error) {
 	return newUser, nil
 }
 
-func (db *DB) checkLogin(email, password string) (int, error) {
-	for x := range db.chirps.Users {
-		if db.chirps.Users[x].Email == email {
-			err := bcrypt.CompareHashAndPassword([]byte(db.chirps.Users[x].Password), []byte(password))
-			if err != nil {
-				return 0, err
-			}
-			return db.chirps.Users[x].ID, nil
+func (db *DB) UpdateUser(email, password string, id int) (User, error) {
+	user, ok := db.chirps.Users[id]
+	if !ok {
+		return User{}, fmt.Errorf("User not found")
+	}
+	hashedPass, err := hashPassword(password)
+	if err != nil {
+		return User{}, err
+	}
+
+	user.Email = email
+	user.Password = hashedPass
+	db.chirps.Users[id] = user
+
+	err = db.writeDB()
+	if err != nil {
+		return User{}, err
+	}
+
+	return user, nil
+}
+
+func (db *DB) checkLogin(email string) (User, error) {
+	for _, user := range db.chirps.Users {
+		if user.Email == email {
+			return user, nil
 		}
 	}
-	return 0, fmt.Errorf("User doesn't exist")
+	return User{}, fmt.Errorf("User doesn't exist")
 }
 
 func (db *DB) GetChirps() (DBChirp, error) {
@@ -159,7 +174,7 @@ func (db *DB) writeDB() error {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	err = os.WriteFile("./database.json", data, 0666)
+	err = os.WriteFile("./database.json", data, 0600)
 	if err != nil {
 		return fmt.Errorf("Error Writing to DB, %s", err)
 	}

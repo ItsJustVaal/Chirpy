@@ -47,7 +47,7 @@ func jsonResp(w http.ResponseWriter, statusCode int, response interface{}) {
 
 // Hash password
 func hashPassword(password string) (string, error) {
-	newPass, err := bcrypt.GenerateFromPassword([]byte(password), 10)
+	newPass, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return " ", err
 	}

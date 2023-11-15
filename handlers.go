@@ -6,8 +6,10 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Checks Server Status
@@ -65,14 +67,50 @@ func (cfg *apiConfig) handlerAddUser(w http.ResponseWriter, r *http.Request) {
 		errorResp(w, http.StatusInternalServerError, "Couldn't decode parameters")
 		return
 	}
+
 	newUser, err := cfg.database.CreateUser(checker.Email, checker.Password)
 	if err != nil {
 		log.Fatalln("Failed to add User")
 		return
 	}
+
 	jsonResp(w, http.StatusCreated, userResponse{
 		Email: newUser.Email,
 		ID:    newUser.ID,
+	})
+}
+
+func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) {
+	token, err := GetBearerToken(r.Header)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Couldn't find JWT")
+		return
+	}
+	user, err := ValidateJWT(token, cfg.JWTSecret)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Couldn't validate JWT")
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	checker := jsonBody{}
+	err = decoder.Decode(&checker)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Couldn't decode parameters")
+		return
+	}
+	userIDInt, err := strconv.Atoi(user)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Couldn't parse user ID")
+		return
+	}
+	updatedUser, err := cfg.database.UpdateUser(checker.Email, checker.Password, userIDInt)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, err.Error())
+	}
+	jsonResp(w, http.StatusOK, User{
+		Email: updatedUser.Email,
+		ID:    userIDInt,
 	})
 }
 
@@ -130,7 +168,6 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request) {
 	chirpIDString := chi.URLParam(r, "id")
-	log.Println(chirpIDString)
 	id, err := strconv.Atoi(chirpIDString)
 	if err != nil {
 		errorResp(w, http.StatusInternalServerError, "Error getting ID")
@@ -150,6 +187,11 @@ func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request
 }
 
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
+	type loginResponse struct {
+		User
+		Token string `json:"token"`
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	decoder := json.NewDecoder(r.Body)
 	checker := jsonBody{}
@@ -159,12 +201,32 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := cfg.database.checkLogin(checker.Email, checker.Password)
+	user, err := cfg.database.checkLogin(checker.Email)
 	if err != nil {
-		errorResp(w, http.StatusUnauthorized, "Wrong email or password")
+		errorResp(w, http.StatusInternalServerError, err.Error())
 	}
-	jsonResp(w, http.StatusOK, userResponse{
-		Email: checker.Email,
-		ID:    id,
+
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(checker.Password))
+	if err != nil {
+		errorResp(w, http.StatusUnauthorized, "Invalid password")
+		return
+	}
+
+	defaultExpiration := 60 * 60 * 24
+	if checker.ExpiresInSeconds == 0 || checker.ExpiresInSeconds > defaultExpiration {
+		checker.ExpiresInSeconds = defaultExpiration
+	}
+
+	token, err := MakeJWT(user.ID, cfg.JWTSecret, time.Duration(checker.ExpiresInSeconds))
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Couldnt make JWT")
+		return
+	}
+	jsonResp(w, http.StatusOK, loginResponse{
+		User: User{
+			ID:    user.ID,
+			Email: user.Email,
+		},
+		Token: token,
 	})
 }

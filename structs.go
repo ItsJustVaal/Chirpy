@@ -2,13 +2,15 @@ package main
 
 type apiConfig struct {
 	fileserverHits int
+	JWTSecret      string
 	database       *DB
 }
 
 type jsonBody struct {
-	Body     string `json:"body"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Body             string `json:"body"`
+	Email            string `json:"email"`
+	Password         string `json:"password"`
+	ExpiresInSeconds int    `json:"expires_in_seconds"`
 }
 
 type cleanedBody struct {
