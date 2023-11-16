@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
@@ -23,9 +24,7 @@ func cleanInput(body string, blockedWords map[string]struct{}) string {
 // Reusable http response functions
 // Errorfunc
 func errorResp(w http.ResponseWriter, errorCode int, message string) {
-	if errorCode > 499 {
-		log.Printf("Responding with 5xx error: %s", message)
-	}
+	log.Printf("Responding error: %s", message)
 	jsonResp(w, errorCode, errorResponse{
 		Error: message,
 	})
@@ -33,7 +32,6 @@ func errorResp(w http.ResponseWriter, errorCode int, message string) {
 
 // Standard response
 func jsonResp(w http.ResponseWriter, statusCode int, response interface{}) {
-	log.Println(response)
 	w.Header().Set("Content-Type", "applcation/json")
 	data, err := json.Marshal(response)
 	if err != nil {
@@ -52,4 +50,21 @@ func hashPassword(password string) (string, error) {
 		return " ", err
 	}
 	return string(newPass), nil
+
+}
+
+func sortChirps(chirps []chirpsResponse, sortOrder string) []chirpsResponse {
+	log.Println("Inside sort")
+	log.Printf("Sort Method, %s", sortOrder)
+	if sortOrder == "asc" || sortOrder == "" {
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[i].ID < chirps[j].ID
+		})
+	} else {
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[i].ID > chirps[j].ID
+		})
+	}
+
+	return chirps
 }

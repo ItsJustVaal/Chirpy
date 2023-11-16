@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 )
 
 type DB struct {
@@ -17,19 +18,22 @@ type DB struct {
 }
 
 type DBChirp struct {
-	Chirps map[int]Chirp `json:"chirps"`
-	Users  map[int]User  `json:"users"`
+	Chirps        map[int]Chirp        `json:"chirps"`
+	Users         map[int]User         `json:"users"`
+	RevokedTokens map[string]time.Time `json:"revoked_tokens"`
 }
 
 type Chirp struct {
-	Body string `json:"body"`
-	ID   int    `json:"id"`
+	Author int    `json:"author_id"`
+	Body   string `json:"body"`
+	ID     int    `json:"id"`
 }
 
 type User struct {
-	Password string `json:"password"`
-	Email    string `json:"email"`
-	ID       int    `json:"id"`
+	Password  string `json:"password"`
+	Email     string `json:"email"`
+	ID        int    `json:"id"`
+	ChirpyRed bool   `json:"is_chirpy_red"`
 }
 
 func NewDB(path string) (*DB, error) {
@@ -45,7 +49,7 @@ func NewDB(path string) (*DB, error) {
 		log.Println("Deleted old file")
 		log.Println("Creating new file")
 		os.Create("database.json")
-		err := os.WriteFile("./database.json", []byte("{ \"chirps\": {}, \"users\": {}}"), 0666)
+		err := os.WriteFile("./database.json", []byte("{ \"chirps\": {}, \"users\": {}, \"revoked_tokens\": {}}"), 0666)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -65,13 +69,14 @@ func NewDB(path string) (*DB, error) {
 	return &DB, nil
 }
 
-func (db *DB) CreateChirp(body string) (Chirp, error) {
+func (db *DB) CreateChirp(body string, authorID int) (Chirp, error) {
 	if body == "" {
 		return Chirp{}, fmt.Errorf("Body is empty")
 	}
 	newChirp := Chirp{
-		ID:   db.chirpsCount,
-		Body: body,
+		ID:     db.chirpsCount,
+		Body:   body,
+		Author: authorID,
 	}
 	db.chirps.Chirps[db.chirpsCount] = newChirp
 	db.chirpsCount++
@@ -80,6 +85,20 @@ func (db *DB) CreateChirp(body string) (Chirp, error) {
 		log.Fatalln(err)
 	}
 	return newChirp, nil
+}
+
+func (db *DB) DeleteChirp(chirpID, authorID int) error {
+	checker, err := db.GetChirpByID(chirpID)
+	if err != nil {
+		return err
+	}
+
+	if checker.Author != authorID {
+		return fmt.Errorf("Not the correct author")
+	}
+
+	delete(db.chirps.Chirps, chirpID)
+	return nil
 }
 
 func (db *DB) CreateUser(email, password string) (User, error) {
@@ -96,9 +115,10 @@ func (db *DB) CreateUser(email, password string) (User, error) {
 		log.Fatalln(err)
 	}
 	newUser := User{
-		Password: hashedPW,
-		ID:       db.usersCount,
-		Email:    email,
+		Password:  hashedPW,
+		ID:        db.usersCount,
+		Email:     email,
+		ChirpyRed: false,
 	}
 	db.chirps.Users[db.usersCount] = newUser
 	db.usersCount++
@@ -140,8 +160,25 @@ func (db *DB) checkLogin(email string) (User, error) {
 	return User{}, fmt.Errorf("User doesn't exist")
 }
 
-func (db *DB) GetChirps() (DBChirp, error) {
-	return db.chirps, nil
+func (db *DB) checkRevokedDB(token string) error {
+	_, ok := db.chirps.RevokedTokens[token]
+	if !ok {
+		return fmt.Errorf("Token not found")
+	}
+	return nil
+}
+
+func (db *DB) revokeToken(token string) error {
+	_, ok := db.chirps.RevokedTokens[token]
+	if !ok {
+		db.chirps.RevokedTokens[token] = time.Now()
+		return nil
+	}
+	return fmt.Errorf("Token already revoked")
+}
+
+func (db *DB) GetChirps() (map[int]Chirp, error) {
+	return db.chirps.Chirps, nil
 }
 
 func (db *DB) GetChirpByID(id int) (Chirp, error) {
@@ -150,8 +187,9 @@ func (db *DB) GetChirpByID(id int) (Chirp, error) {
 		return Chirp{}, fmt.Errorf("Chirp Does Not Exist")
 	}
 	respChirp := Chirp{
-		Body: chirp.Body,
-		ID:   chirp.ID,
+		Author: chirp.Author,
+		Body:   chirp.Body,
+		ID:     chirp.ID,
 	}
 	return respChirp, nil
 }
@@ -179,5 +217,20 @@ func (db *DB) writeDB() error {
 		return fmt.Errorf("Error Writing to DB, %s", err)
 	}
 	log.Println("Database saved")
+	return nil
+}
+
+func (db *DB) upgradeUser(userID int) error {
+	user, ok := db.chirps.Users[userID]
+	if !ok {
+		return fmt.Errorf("User not found")
+	}
+	user.ChirpyRed = true
+	db.chirps.Users[userID] = user
+
+	err := db.writeDB()
+	if err != nil {
+		return err
+	}
 	return nil
 }

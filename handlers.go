@@ -50,8 +50,9 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Hits reset to 0"))
 }
 
-func (cfg *apiConfig) AddChirp(body string) (Chirp, error) {
-	newChirp, err := cfg.database.CreateChirp(body)
+// Creates Chirp
+func (cfg *apiConfig) AddChirp(body string, id int) (Chirp, error) {
+	newChirp, err := cfg.database.CreateChirp(body, id)
 	if err != nil {
 		log.Fatalln("Failed to add Chirp")
 		return Chirp{}, err
@@ -59,7 +60,9 @@ func (cfg *apiConfig) AddChirp(body string) (Chirp, error) {
 	return newChirp, nil
 }
 
+// Creates user
 func (cfg *apiConfig) handlerAddUser(w http.ResponseWriter, r *http.Request) {
+	log.Println("Calling Add User")
 	decoder := json.NewDecoder(r.Body)
 	checker := jsonBody{}
 	err := decoder.Decode(&checker)
@@ -75,12 +78,15 @@ func (cfg *apiConfig) handlerAddUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResp(w, http.StatusCreated, userResponse{
-		Email: newUser.Email,
-		ID:    newUser.ID,
+		Email:     newUser.Email,
+		ID:        newUser.ID,
+		ChirpyRed: newUser.ChirpyRed,
 	})
 }
 
+// Updates user
 func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) {
+	log.Println("Calling Update User")
 	token, err := GetBearerToken(r.Header)
 	if err != nil {
 		errorResp(w, http.StatusUnauthorized, "Couldn't find JWT")
@@ -114,11 +120,28 @@ func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// Checks if chirp is valid
 func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
+	token, err := GetBearerToken(r.Header)
+	if err != nil {
+		errorResp(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+	user, err := ValidateJWT(token, cfg.JWTSecret)
+	if err != nil {
+		errorResp(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	id, err := strconv.Atoi(user)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Error getting ID")
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	decoder := json.NewDecoder(r.Body)
 	checker := jsonBody{}
-	err := decoder.Decode(&checker)
+	err = decoder.Decode(&checker)
 	if err != nil {
 		errorResp(w, http.StatusInternalServerError, "Couldn't decode parameters")
 		return
@@ -134,31 +157,57 @@ func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, r *http.Reques
 		"fornax":    {},
 	}
 	cleanBody := cleanInput(checker.Body, blockedWords)
-	newChirp, err := cfg.AddChirp(cleanBody)
+	newChirp, err := cfg.AddChirp(cleanBody, id)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	jsonResp(w, http.StatusCreated, chirpsResponse{
-		Body: newChirp.Body,
-		ID:   newChirp.ID,
+		Author: newChirp.Author,
+		Body:   newChirp.Body,
+		ID:     newChirp.ID,
 	})
 }
 
+// Gets all chirps
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 	allChirps, err := cfg.database.GetChirps()
 	if err != nil {
 		errorResp(w, http.StatusNoContent, "No Chirps")
 		return
 	}
-
-	var finalChirps []chirpsResponse
-	for _, y := range allChirps.Chirps {
-		finalChirps = append(finalChirps, chirpsResponse{
-			Body: y.Body,
-			ID:   y.ID,
-		})
+	var id int
+	s := r.URL.Query().Get("author_id")
+	if s != "" {
+		id, err = strconv.Atoi(s)
+		if err != nil {
+			errorResp(w, http.StatusInternalServerError, "Error getting ID")
+			return
+		}
 	}
-	finalResp, err := json.Marshal(finalChirps)
+	var finalChirps []chirpsResponse
+
+	if id != 0 {
+		for _, y := range allChirps {
+			if y.Author == id {
+				finalChirps = append(finalChirps, chirpsResponse{
+					Author: y.Author,
+					Body:   y.Body,
+					ID:     y.ID,
+				})
+			}
+		}
+	} else {
+		for _, y := range allChirps {
+			finalChirps = append(finalChirps, chirpsResponse{
+				Author: y.Author,
+				Body:   y.Body,
+				ID:     y.ID,
+			})
+		}
+	}
+	sortMethod := r.URL.Query().Get("sort")
+	sortedChirps := sortChirps(finalChirps, sortMethod)
+	finalResp, err := json.Marshal(sortedChirps)
 	if err != nil {
 		errorResp(w, http.StatusInternalServerError, "Failed to Marshal")
 		return
@@ -166,6 +215,7 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 	w.Write(finalResp)
 }
 
+// Gets a chirp by its ID
 func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request) {
 	chirpIDString := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(chirpIDString)
@@ -186,10 +236,45 @@ func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request
 	jsonResp(w, http.StatusOK, chirp)
 }
 
+func (cfg *apiConfig) handlerDeleteChirpByID(w http.ResponseWriter, r *http.Request) {
+	log.Println("Calling Delete Chirp")
+	chirpIDString := chi.URLParam(r, "id")
+	chirpID, err := strconv.Atoi(chirpIDString)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Error getting ID")
+		return
+	}
+	token, err := GetBearerToken(r.Header)
+	if err != nil {
+		errorResp(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+	user, err := ValidateJWT(token, cfg.JWTSecret)
+	if err != nil {
+		errorResp(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	userID, err := strconv.Atoi(user)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Error getting ID")
+		return
+	}
+
+	log.Println("Deleting")
+	err = cfg.database.DeleteChirp(chirpID, userID)
+	if err != nil {
+		errorResp(w, http.StatusForbidden, err.Error())
+	}
+	jsonResp(w, http.StatusOK, "Deleted")
+}
+
+// Checks login and grants token
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
+	log.Println("Calling Login")
 	type loginResponse struct {
 		User
-		Token string `json:"token"`
+		Token        string `json:"token"`
+		RefreshToken string `json:"refresh_token"`
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -204,6 +289,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	user, err := cfg.database.checkLogin(checker.Email)
 	if err != nil {
 		errorResp(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(checker.Password))
@@ -212,22 +298,141 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defaultExpiration := 60 * 60 * 24
-	if checker.ExpiresInSeconds == 0 {
-		checker.ExpiresInSeconds = defaultExpiration
-	} else if checker.ExpiresInSeconds > defaultExpiration {
-		checker.ExpiresInSeconds = defaultExpiration
-	}
-	token, err := MakeJWT(user.ID, cfg.JWTSecret, time.Duration(checker.ExpiresInSeconds)*time.Second)
+	token, err := MakeJWTAccess(user.ID, cfg.JWTSecret, time.Duration(60)*time.Minute)
 	if err != nil {
-		errorResp(w, http.StatusInternalServerError, "Couldnt make JWT")
+		errorResp(w, http.StatusInternalServerError, "Couldnt make JWT Access Token")
 		return
 	}
+
+	refresh, err := MakeJWTRefresh(user.ID, cfg.JWTSecret, time.Duration(1440)*time.Hour)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Couldnt make JWT Access Token")
+		return
+	}
+
 	jsonResp(w, http.StatusOK, loginResponse{
 		User: User{
-			ID:    user.ID,
-			Email: user.Email,
+			ID:        user.ID,
+			Email:     user.Email,
+			ChirpyRed: user.ChirpyRed,
 		},
-		Token: token,
+		Token:        token,
+		RefreshToken: refresh,
 	})
+}
+
+func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
+	log.Println("Calling Refresh")
+	type refreshResp struct {
+		Token string `json:"token"`
+	}
+	w.Header().Set("Content-Type", "application/json")
+	decoder := json.NewDecoder(r.Body)
+	checker := jsonBody{}
+	err := decoder.Decode(&checker)
+	if err == nil {
+		errorResp(w, http.StatusUnauthorized, "Request cant have a body")
+		return
+	}
+
+	token, err := GetBearerToken(r.Header)
+	if err != nil {
+		errorResp(w, http.StatusUnauthorized, "Couldn't find JWT")
+		return
+	}
+	user, err := ValidateJWTRefresh(token, cfg.JWTSecret)
+	if err != nil {
+		errorResp(w, http.StatusUnauthorized, "test 1")
+		return
+	}
+
+	err = cfg.database.checkRevokedDB(token)
+	if err == nil {
+		errorResp(w, http.StatusUnauthorized, "Token revoked")
+		return
+	}
+	userIDInt, err := strconv.Atoi(user)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Couldn't parse user ID")
+		return
+	}
+
+	newToken, err := MakeJWTAccess(userIDInt, cfg.JWTSecret, time.Duration(60)*time.Minute)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Test 2")
+		return
+	}
+
+	log.Println("Passed all checks, responding")
+	jsonResp(w, http.StatusOK, refreshResp{
+		Token: newToken,
+	})
+
+}
+
+func (cfg *apiConfig) handlerRevoke(w http.ResponseWriter, r *http.Request) {
+	log.Println("Calling Revoke")
+	w.Header().Set("Content-Type", "application/json")
+	decoder := json.NewDecoder(r.Body)
+	checker := jsonBody{}
+	err := decoder.Decode(&checker)
+	if err == nil {
+		errorResp(w, http.StatusUnauthorized, "Request cant have a body")
+		return
+	}
+
+	token, err := GetBearerToken(r.Header)
+	if err != nil {
+		errorResp(w, http.StatusUnauthorized, "Couldn't find JWT")
+		return
+	}
+	_, err = ValidateJWTRefresh(token, cfg.JWTSecret)
+	if err != nil {
+		errorResp(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	err = cfg.database.revokeToken(token)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResp(w, http.StatusOK, "Token Revoked")
+}
+
+func (cfg *apiConfig) handlerUpgradeUser(w http.ResponseWriter, r *http.Request) {
+	log.Println("Calling upgrade")
+	type userEvent struct {
+		Event string `json:"event"`
+		Data  struct {
+			User int `json:"user_id"`
+		} `json:"data"`
+	}
+	apiKey, err := GetBearerToken(r.Header)
+	if err != nil || apiKey != cfg.PolkaKey {
+		errorResp(w, http.StatusUnauthorized, "Unauthorized API Key")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	decoder := json.NewDecoder(r.Body)
+	checker := userEvent{}
+	err = decoder.Decode(&checker)
+	if err != nil {
+		errorResp(w, http.StatusInternalServerError, "Request has no body")
+		return
+	}
+
+	if checker.Event != "user.upgraded" {
+		jsonResp(w, http.StatusOK, "not an upgrade event")
+		return
+	}
+
+	err = cfg.database.upgradeUser(checker.Data.User)
+	if err != nil {
+		errorResp(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	jsonResp(w, http.StatusOK, "")
 }

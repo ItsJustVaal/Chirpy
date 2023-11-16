@@ -15,6 +15,7 @@ func main() {
 	dbPath := "database.json"
 	database, err := NewDB(dbPath)
 	jwtSecret := os.Getenv("JWT_SECRET")
+	polkaKey := os.Getenv("POLKA_KEY")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -22,6 +23,7 @@ func main() {
 	cfg := apiConfig{
 		fileserverHits: 0,
 		JWTSecret:      jwtSecret,
+		PolkaKey:       polkaKey,
 		database:       database,
 	}
 
@@ -39,10 +41,17 @@ func main() {
 	apiServer.Get("/reset", cfg.handlerReset)
 	apiServer.Get("/chirps", cfg.handlerGetChirps)
 	apiServer.Get("/chirps/{id}", cfg.handlerGetChirpByID)
+
 	apiServer.Post("/chirps", cfg.handlerValidateChirp)
 	apiServer.Post("/users", cfg.handlerAddUser)
 	apiServer.Post("/login", cfg.handlerLogin)
+	apiServer.Post("/refresh", cfg.handlerRefresh)
+	apiServer.Post("/revoke", cfg.handlerRevoke)
+	apiServer.Post("/polka/webhooks", cfg.handlerUpgradeUser)
+
 	apiServer.Put("/users", cfg.handlerUpdateUser)
+
+	apiServer.Delete("/chirps/{id}", cfg.handlerDeleteChirpByID)
 
 	// Admin sub-router
 	adminServer := chi.NewRouter()

@@ -3,6 +3,7 @@ package main
 type apiConfig struct {
 	fileserverHits int
 	JWTSecret      string
+	PolkaKey       string
 	database       *DB
 }
 
@@ -22,13 +23,15 @@ type errorResponse struct {
 }
 
 type chirpsResponse struct {
-	Body string `json:"body"`
-	ID   int    `json:"id"`
+	Author int    `json:"author_id"`
+	Body   string `json:"body"`
+	ID     int    `json:"id"`
 }
 
 type userResponse struct {
-	Email string `json:"email"`
-	ID    int    `json:"id"`
+	Email     string `json:"email"`
+	ID        int    `json:"id"`
+	ChirpyRed bool   `json:"is_chirpy_red"`
 }
 
 type userLogin struct {
